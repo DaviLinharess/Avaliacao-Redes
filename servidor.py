@@ -20,10 +20,9 @@ class ServidorSSL:
         servidor_socket.listen()
         print(f"[SERVIDOR SSL] Escutando em {self.host}:{self.porta_tcp}")
 
-        #servidor_ssl_socket = contexto_ssl.wrap_socket(servidor_socket, server_side=True)
+        servidor_ssl_socket = contexto_ssl.wrap_socket(servidor_socket, server_side=True)
 
-        #thread_aceitar = threading.Thread(target=self.aceitar_clientes, args=(servidor_ssl_socket,))
-        thread_aceitar = threading.Thread(target=self.aceitar_clientes, args=(servidor_socket,))
+        thread_aceitar = threading.Thread(target=self.aceitar_clientes, args=(servidor_ssl_socket,))
         thread_aceitar.daemon = True
         thread_aceitar.start()
 
