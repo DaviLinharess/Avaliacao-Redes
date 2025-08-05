@@ -4,6 +4,7 @@ import socket
 import psutil
 import json
 import time
+import ssl
 
 
 class Cliente:
@@ -24,11 +25,15 @@ class Cliente:
         self.sock = None
 
     def connect(self):
-        """Tenta se conectar ao servidor."""
         try:
-            # Cria um novo socket para cada tentativa de conexão.
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            contexto = ssl.create_default_context()
+            contexto.check_hostname = False
+            contexto.verify_mode = ssl.CERT_NONE
+
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sock = contexto.wrap_socket(sock, server_hostname=self.host_servidor)
             self.sock.connect((self.host_servidor, self.port_servidor))
+
             print(f"[*] Conectado com sucesso ao servidor {self.host_servidor}:{self.port_servidor}")
             return True
         except ConnectionRefusedError:
@@ -127,7 +132,7 @@ if __name__ == "__main__":
     # IMPORTANTE: Altere este IP para o endereço da máquina onde o servidor está rodando.
     # Se for na mesma máquina, use '127.0.0.1'.
     IP_DO_SERVIDOR = "127.0.0.1"
-    PORTA_DO_SERVIDOR = 12345
+    PORTA_DO_SERVIDOR = 5000
     
     cliente = Cliente(IP_DO_SERVIDOR, PORTA_DO_SERVIDOR)
     cliente.run()

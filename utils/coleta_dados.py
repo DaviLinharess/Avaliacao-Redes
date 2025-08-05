@@ -1,34 +1,39 @@
 import psutil
 import socket
 
-def coletar_dados():
-    # dados básicos
-    dados = {
-        "cpu_count": psutil.cpu_count(),
-        "memoria_ram_livre": psutil.virtual_memory().available,
-        "espaco_disco_livre": psutil.disk_usage("/").free,
-        "enderecos_ip": {},
-        "interfaces_desativadas": [],
-        "portas_abertas": listar_portas_abertas(),
-    }
 
-    # endereços IP por interface
-    for interface, addrs in psutil.net_if_addrs().items():
-        ips = [addr.address for addr in addrs if addr.family == socket.AF_INET]
-        dados["enderecos_ip"][interface] = ips
+def coletar_interfaces():
+    stats = psutil.net_if_stats()
+    addrs = psutil.net_if_addrs()
+    interfaces = {}
 
-    # interfaces desativadas
-    for interface, stats in psutil.net_if_stats().items():
-        if not stats.isup:
-            dados["interfaces_desativadas"].append(interface)
+    for nome, addr_list in addrs.items():
+        ativo = stats[nome].isup if nome in stats else False
+        ip = [a.address for a in addr_list if a.family == socket.AF_INET]  # IPv4
+        interfaces[nome] = {"ativo": ativo, "ip": ip}
 
-    return dados
+    return interfaces
 
-def listar_portas_abertas():
-    portas = []
-    conexoes = psutil.net_connections()
+
+def coletar_portas_abertas():
+    conexoes = psutil.net_connections(kind="inet")
+    portas = {"tcp": set(), "udp": set()}
+
     for c in conexoes:
-        if c.status == "LISTEN":
-            tipo = "TCP" if c.type == socket.SOCK_STREAM else "UDP"
-            portas.append({"tipo": tipo, "porta": c.laddr.port})
+        if c.laddr and c.status == psutil.CONN_LISTEN:
+            if c.type == socket.SOCK_STREAM:
+                portas["tcp"].add(c.laddr.port)
+            elif c.type == socket.SOCK_DGRAM:
+                portas["udp"].add(c.laddr.port)
+
     return portas
+
+def coletar_dados():
+    dados = {
+        "cpu": psutil.cpu_count(),
+        "memoria_ram_livre": psutil.virtual_memory().available,
+        "espaco_disco_livre": psutil.disk_usage('/').free,
+        "interfaces": coletar_interfaces(),
+        "portas_abertas": coletar_portas_abertas(),
+    }
+    return dados

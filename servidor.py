@@ -1,92 +1,160 @@
-# servidor.py
-
 import socket
+import ssl
 import threading
 import json
 
 class Servidor:
-    """
-    Classe que representa o servidor da aplicação.
-    Ele escuta por conexões de clientes e recebe dados de sistema.
-    """
-    def __init__(self, host='0.0.0.0', port=12345):
-        """
-        Construtor da classe Servidor.
-        
-        Args:
-            host (str): Endereço de IP no qual o servidor irá escutar. '0.0.0.0' significa
-                        que ele aceitará conexões de qualquer interface de rede.
-            port (int): Porta na qual o servidor irá escutar.
-        """
+    def __init__(self, host="0.0.0.0", porta_tcp=5000, certfile="certificado.pem", keyfile="chave.pem"):
         self.host = host
-        self.port = port
-        self.clients = {}  # Dicionário para armazenar clientes: {addr: conn}
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # A opção SO_REUSEADDR permite que o servidor reinicie e use a mesma porta rapidamente.
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.porta_tcp = porta_tcp
+        self.certfile = certfile
+        self.keyfile = keyfile
+        self.clientes = {}  # {endereco: {"conexao": conexao, "dados": dados}}
 
-    def start(self):
-        """
-        Inicia o servidor, coloca-o em modo de escuta e começa a aceitar conexões.
-        """
-        # Vincula o socket ao endereço e porta especificados.
-        self.sock.bind((self.host, self.port))
-        # Define o limite de conexões pendentes.
-        self.sock.listen(5)
-        print(f"[*] Servidor iniciado e escutando em {self.host}:{self.port}")
+    def iniciar(self):
+        contexto_ssl = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        contexto_ssl.load_cert_chain(certfile=self.certfile, keyfile=self.keyfile)
 
-        # Loop principal para aceitar novas conexões.
+        servidor_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        servidor_socket.bind((self.host, self.porta_tcp))
+        servidor_socket.listen(5)
+
+        print(f"[SERVIDOR SSL] Escutando em {self.host}:{self.porta_tcp}...\n")
+
+        servidor_ssl_socket = contexto_ssl.wrap_socket(servidor_socket, server_side=True)
+
         while True:
-            # accept() é uma chamada bloqueante: o código para aqui até um cliente se conectar.
-            # Retorna o objeto de conexão (conn) e o endereço (addr) do cliente.
-            conn, addr = self.sock.accept()
-            
-            print(f"[*] Nova conexão aceita de {addr[0]}:{addr[1]}")
-            self.clients[addr] = conn
+            conexao, endereco = servidor_ssl_socket.accept()
+            print(f"[NOVA CONEXÃO] Cliente conectado: {endereco}")
+            thread = threading.Thread(target=self._lidar_com_cliente, args=(conexao, endereco))
+            thread.start()
 
-            # Cria uma nova thread para gerenciar a comunicação com este cliente.
-            # Isso permite que o servidor lide com múltiplos clientes simultaneamente.
-            client_thread = threading.Thread(target=self.handle_client, args=(conn, addr))
-            client_thread.start()
-
-    def handle_client(self, conn, addr):
-        """
-        Gerencia a comunicação com um cliente conectado.
-        Esta função roda em uma thread separada para cada cliente.
-        """
-        print(f"[*] Iniciando comunicação com {addr[0]}")
+    def _lidar_com_cliente(self, conexao, endereco):
         try:
-            # Loop para receber dados do cliente continuamente.
             while True:
-                # Espera por dados do cliente (buffer de 4096 bytes).
-                data = conn.recv(4096)
-                # Se não receber dados, significa que o cliente desconectou.
-                if not data:
+                dados_recebidos = conexao.recv(4096).decode("utf-8")
+                if not dados_recebidos:
                     break
-                
-                # Decodifica os bytes para string e converte a string JSON para um dicionário Python.
-                client_data = json.loads(data.decode('utf-8'))
-                
-                print("\n" + "="*50)
-                print(f"Dados recebidos do cliente {addr[0]}:")
-                # Usa json.dumps com indentação para imprimir os dados de forma legível.
-                print(json.dumps(client_data, indent=4, ensure_ascii=False))
-                print("="*50 + "\n")
 
-        except ConnectionResetError:
-            # Ocorre quando a conexão é fechada abruptamente pelo cliente.
-            print(f"[!] A conexão com {addr[0]} foi perdida.")
-        except json.JSONDecodeError:
-            print(f"[!] Erro ao decodificar JSON do cliente {addr[0]}.")
+                dados_json = json.loads(dados_recebidos)
+
+                # Atualiza ou registra os dados do cliente
+                self.clientes[endereco] = {
+                    "conexao": conexao,
+                    "dados": dados_json
+                }
+
+                print(f"[DADOS RECEBIDOS] de {endereco}: {dados_json}")
+        except Exception as e:
+            print(f"[ERRO] {e}")
         finally:
-            # Garante que a conexão seja fechada e o cliente removido da lista.
-            print(f"[*] Cliente {addr[0]} desconectado.")
-            if addr in self.clients:
-                del self.clients[addr]
-            conn.close()
+            conexao.close()
+            print(f"[!] Conexão com {endereco} encerrada.")
 
-# --- Ponto de Entrada do Script ---
-# Este bloco só é executado quando o arquivo é rodado diretamente (python servidor.py).
+        
+    def listar_clientes(self):
+        if not self.clientes:
+            print("Nenhum cliente conectado.")
+        else:
+            for i, (endereco, info) in enumerate(self.clientes.items(), 1):
+                print(f"{i}. {endereco} - CPUs Totais: {info['dados'].get('Processadores (Total)', 'Desconhecido')} núcleos")
+                
+
+    def detalhar_cliente(self):
+        if not self.clientes:
+            print("Nenhum cliente conectado.")
+            return
+
+        self.listar_clientes()
+        try:
+            escolha = int(input("Escolha o número do cliente: "))
+        except ValueError:
+            print("Opção inválida: deve ser um número.")
+            return
+        
+        if escolha < 1 or escolha > len(self.clientes):
+            print("Opção inválida: cliente não existe.")
+            return
+
+        endereco = list(self.clientes.keys())[escolha - 1]
+        dados = self.clientes[endereco]["dados"]
+
+        print("\n===== Detalhes do Cliente =====")
+        print(f"CPUs Totais: {dados.get('Processadores (Total)', 'Desconhecido')} núcleos")
+        print(f"Memória RAM Livre: {dados.get('Memória RAM Livre (GB)', 'Desconhecido')} GB")
+        print(f"Espaço em Disco Livre: {dados.get('Espaço em Disco Livre (GB)', 'Desconhecido')} GB")
+
+        print("\n--- Interfaces de Rede ---")
+        interfaces = dados.get("Interfaces de Rede", {})
+        for nome, info in interfaces.items():
+            status = info.get("Status", "Desconhecido")
+            ips = info.get("Endereços IP", [])
+            if isinstance(ips, list):
+                ips = ", ".join(ips) if ips else "Sem IP"
+            print(f"{nome} - {status} - IPs: {ips}")
+
+        print("\n--- Portas Abertas ---")
+        portas_tcp = dados.get("Portas TCP Abertas (Listen)", [])
+        portas_udp = dados.get("Portas UDP Abertas", [])
+        print(f"TCP: {', '.join(map(str, portas_tcp)) if portas_tcp else 'Nenhuma'}")
+        print(f"UDP: {', '.join(map(str, portas_udp)) if portas_udp else 'Nenhuma'}")
+        
+    def menu(self):
+        while True:
+            print("\n===== MENU SERVIDOR =====")
+            print("1. Listar clientes")
+            print("2. Detalhar cliente")
+            print("3. Ver média dos dados recebidos")
+            print("0. Sair")
+
+            opcao = input("Escolha uma opção: ")
+
+            if opcao == "1":
+                self.listar_clientes()
+            elif opcao == "2":
+                self.detalhar_cliente()
+            elif opcao == "3":
+                self.calcular_media_dos_dados()
+            elif opcao == "0":
+                print("Encerrando servidor...")
+                break
+            else:
+                print("Opção inválida.")
+
+
+    def calcular_media_dos_dados(self):
+        if not self.clientes:
+            print("[!] Nenhum cliente conectado.")
+            return
+
+        total = 0
+        soma_ram = soma_disco = soma_cpu = 0
+
+        for cliente_id, cliente in self.clientes.items():
+            dados = cliente.get("dados", {})
+            try:
+                soma_ram += dados["Memória RAM Livre (GB)"]
+                soma_disco += dados["Espaço em Disco Livre (GB)"]
+                soma_cpu += dados["Processadores (Total)"]
+                total += 1
+            except KeyError:
+                print(f"[!] Dados incompletos do cliente {cliente_id}. Ignorando...")
+                continue
+
+        if total == 0:
+            print("[!] Nenhum cliente com dados completos para cálculo.")
+            return
+
+        media_ram = round(soma_ram / total, 2)
+        media_disco = round(soma_disco / total, 2)
+        media_cpu = round(soma_cpu / total, 2)
+
+        print("\n==== MÉDIAS DOS DADOS RECEBIDOS ====")
+        print(f"Média RAM Livre: {media_ram} GB")
+        print(f"Média Disco Livre: {media_disco} GB")
+        print(f"Média de CPUs (total): {media_cpu}")
+
 if __name__ == "__main__":
     servidor = Servidor()
-    servidor.start()
+    threading.Thread(target=servidor.iniciar, daemon=True).start()
+    servidor.menu()
