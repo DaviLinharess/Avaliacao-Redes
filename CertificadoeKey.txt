@@ -1,0 +1,32 @@
+OQUE USEI PRA GERAR O CERTIFICADO DIGITAL:
+
+
+openssl req -new -x509 -days 365 -nodes -out certificado.pem -keyout chave.pem
+
+openssl req -new=> vamos criar uma requisição de certificado
+-x509 => não vai gerar o pedido da assinatura, e sim criar o certificado direto (autoassinado), que é usado pra testes
+-days 365 => vai ser valido por 365 dias
+-nodes => no DES encryption (Não protege a chave privada com senha)
+-out certificado.pem => nome do arquivo de saida, que vai ter o certificado publico
+-keyout chave.pem => nome do arquivo que vai ter a chave privada
+
+o Certificado.pem tem a chave pública, que pode ser compartilhada com qualquer cliente pra criptografar e verificar conexão
+
+a Chave.pem tem a chave privada, que fica só no servidor. Serve pra descriptografar dados enviados dos clientes 
+
+
+
+
+Country Name (2 letter code) [XX]: 
+State or Province Name (full name) []: 
+Locality Name (eg, city) []: 
+Organization Name (eg, company) []: 
+Organizational Unit Name (eg, section) []: 
+Common Name (e.g. server FQDN or YOUR name) []: 
+Email Address []: 
+
+
+o próprio servidor assina o certificado, usando a chave privada dele, sem envolver uma autoridade certificadora externa.
+é tipo escrever e assinar o proprio documento.
+
+Dá pra escutar de outro PC sem ser local, precisa escutar no IP certo e o cliente ter o IP do servidor e o certificado público (.pem) pra validar a conexão

@@ -91,7 +91,7 @@ class Servidor:
 
         print("\n--- Interfaces de Rede ---")
         interfaces = dados.get("Interfaces de Rede", {})
-        for nome, info in interfaces.items():
+        for nome, info in interfaces.items():               
             status = info.get("Status", "Desconhecido")
             ips = info.get("Endereços IP", [])
             if isinstance(ips, list):
@@ -143,11 +143,11 @@ class Servidor:
                 soma_cpu += dados["Processadores (Total)"]
                 total += 1
             except KeyError:
-                print(f"[!] Dados incompletos do cliente {cliente_id}. Ignorando...")
+                print(f"[!] Dados incompletos do cliente {cliente_id}.")
                 continue
 
         if total == 0:
-            print("[!] Nenhum cliente com dados completos para cálculo.")
+            print("[!] Sem clientes com dados completos.")
             return
 
         media_ram = round(soma_ram / total, 2)

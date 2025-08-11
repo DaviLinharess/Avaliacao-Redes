@@ -1,5 +1,3 @@
-# cliente.py
-
 import socket
 import psutil
 import json
